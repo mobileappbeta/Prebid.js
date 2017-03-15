@@ -19,6 +19,10 @@ const BUNDLE = 'bundle';
 var _timedOutBidders = [];
 var _sampled = true;
 
+function copy(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 export default function AnalyticsAdapter({ url, analyticsType, global, handler }) {
   var _queue = [];
   var _eventCount = 0;
@@ -63,7 +67,7 @@ export default function AnalyticsAdapter({ url, analyticsType, global, handler }
     const _this = this;
 
     if (typeof _pipe === 'function') {
-      args = _pipe(eventType, args);
+      args = _pipe(eventType, copy(args));
     }
 
     if (global && window[global] && eventType && args) {
