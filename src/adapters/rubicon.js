@@ -7,9 +7,8 @@ import { STATUS } from 'src/constants';
 
 const RUBICON_BIDDER_CODE = 'rubicon';
 
-// use deferred function call since version isn't defined yet at this point
 function getIntegration() {
-  return 'pbjs_lite_' + $$PREBID_GLOBAL$$.version;
+  return 'pbjs-$prebid.version$';
 }
 
 // use protocol relative urls for http or https

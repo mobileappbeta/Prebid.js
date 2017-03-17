@@ -7,7 +7,7 @@ import {parse as parseQuery} from 'querystring';
 
 var CONSTANTS = require('src/constants.json');
 
-const INTEGRATION = `pbjs_lite_v$prebid.version$`; // $prebid.version$ will be substituted in by gulp in built prebid
+const INTEGRATION = `pbjs-$prebid.version$`; // $prebid.version$ will be substituted in by gulp in built prebid
 
 describe('the rubicon adapter', () => {
 
