@@ -42,10 +42,10 @@ export default Object.assign({}, baseAdapter,
     _sampleRate: 1,
 
     // Save request IDs for matching responses to log unavailable data
-    requestIds : {},
+    bidderRequests : {},
 
-    // Events object to batch request events.  Note: Adapter extending forces events to be {} instead of [] if defined
-    events: {},
+    // Events array to batch request events.
+    events: [],
 
     // Call back to handle single request batch after 'timeoutLength' time
     eventTrackingCallback: false,
@@ -66,19 +66,13 @@ export default Object.assign({}, baseAdapter,
      *
      * @param trackingParams
      */
-    track(trackingParams) {
-      // Set request for all events at once
-      let eventType = trackingParams.eventType;
-      let data      = trackingParams.args;
-
+    track({eventType, args}) {
       if (eventType !== BID_REQUESTED && eventType !== BID_RESPONSE) {
-        utils.logInfo(fmt('Untracked Event'), trackingParams);
-
-        return;
+        utils.logInfo(fmt('Untracked Event'), eventType);
+      } else {
+        this.batchTrackEvent(eventType, args);
+        utils.logInfo(fmt('Tracking Event - ' + eventType), args);
       }
-
-      this.batchTrackEvent(eventType, data);
-      utils.logInfo(fmt('Tracking Event - ' + eventType), data);
     },
 
     /**
@@ -89,7 +83,7 @@ export default Object.assign({}, baseAdapter,
      * @returns {string}
      */
     formatAuctionEvent(oBidReq) {
-      let platform      = this.getDevicePlatform();
+      let platform    = this.getDevicePlatform();
       let domain      = this.getDomain();
       let accountId   = this.getAccountId();
       let adapterCode = oBidReq.bidderCode;
@@ -110,9 +104,7 @@ export default Object.assign({}, baseAdapter,
       }
 
       // Store values needed for response logging by request ID
-      this.requestIds[requestId] = {
-        timeout: oBidReq.timeout
-      };
+      this.bidderRequests[requestId] = oBidReq;
 
       return logEntries.join('|');
     },
@@ -127,7 +119,7 @@ export default Object.assign({}, baseAdapter,
     formatResponseEvent(oBidResponse) {
       // Get and parse tracking details
       let requestId   = oBidResponse.requestId;
-      let requestInfo = this.requestIds[requestId];
+      let bidderRequest = this.bidderRequests[requestId];
 
       let adUnitCode     = encodeURIComponent(oBidResponse.adUnitCode);
       let statusCode     = oBidResponse.getStatusCode();
@@ -137,7 +129,7 @@ export default Object.assign({}, baseAdapter,
       let fitFlag        = (statusCode === 1 ? 1 : 0);
       let latency        = oBidResponse.timeToRespond;
       let latencyTier    = this.getLatencyTier(latency);
-      let platform        = this.getDevicePlatform();
+      let platform       = this.getDevicePlatform();
       let domain         = this.getDomain();
       let dimensions     = oBidResponse.getSize();
       let adapterCode    = oBidResponse.bidderCode;
@@ -147,8 +139,8 @@ export default Object.assign({}, baseAdapter,
       let sampleRate     = this._sampleRate;
       let cpm            = oBidResponse.cpm;
 
-      if (requestInfo && requestInfo.timeout) {
-        timeoutValue = requestInfo.timeout;
+      if (bidderRequest && bidderRequest.timeout) {
+        timeoutValue = bidderRequest.timeout;
       }
 
       if (latency > timeoutValue) {
@@ -167,13 +159,12 @@ export default Object.assign({}, baseAdapter,
      * @param eventType   {string}    Prebid constant-defined event type
      * @param data        {object}    Event data
      */
-    batchTrackEvent(eventType, data) {
+    batchTrackEvent(eventType, args) {
       utils.logInfo(fmt(`Add event ${eventType} to bach`));
 
-      let entry = [eventType, data];
-      let uuid  = utils.generateUUID();
+      let entry = [eventType, args];
 
-      this.events[uuid] = entry;
+      this.events.push(entry);
 
       // Ignore if the callback is currently set
       if (this.eventTrackingCallback) {
@@ -186,33 +177,26 @@ export default Object.assign({}, baseAdapter,
         utils.logInfo(fmt('Flushing events'));
 
         let logEvents = [];
-        let callbacks = {};
+        let callbacks = {
+          [BID_REQUESTED]: this.formatAuctionEvent,
+          [BID_RESPONSE]: this.formatResponseEvent
+        };
 
-        callbacks[BID_REQUESTED] = this.formatAuctionEvent;
-        callbacks[BID_RESPONSE]  = this.formatResponseEvent;
-
-        for (var key in this.events) {
-          if (!this.events.hasOwnProperty(key)) {
-            continue;
-          }
-
-          let entryType = this.events[key][0];
-          let entryData = this.events[key][1];
+        this.events.forEach((event) => {
+          let [entryType, entryData] = event;
 
           if (!callbacks.hasOwnProperty(entryType)) {
             utils.logError(fmt(`Invalid event type : ${entryType}`));
-            continue;
+          } else {
+            logEvents.push(
+                callbacks[entryType].apply(this, [entryData])
+            );
           }
+        });
 
-          let callback = callbacks[entryType];
-          let logEntry = callback.apply(this, [entryData]);
+        this.events = [];
 
-          delete this.events[key];
-
-          logEvents.push(logEntry);
-        }
-
-        if (!utils.isEmpty(logEvents)) {
+        if (logEvents.length) {
           this.sendLogRequest(logEvents.join('|'));
         }
 
