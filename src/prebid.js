@@ -2,6 +2,7 @@
 
 import { getGlobal } from './prebidGlobal';
 import {flatten, uniques, isGptPubadsDefined, adUnitsFilter } from './utils';
+import {module, enableModules} from "./modules";
 import { videoAdUnit, hasNonVideoBidder } from './video';
 import 'polyfill';
 import {parse as parseURL, format as formatURL} from './url';
@@ -740,6 +741,12 @@ $$PREBID_GLOBAL$$.setS2SConfig = function(options) {
   adaptermanager.setS2SConfig(config);
 };
 
+
+// expose public module API
+Object.assign($$PREBID_GLOBAL$$, {
+  module,
+  enableModules
+});
 
 $$PREBID_GLOBAL$$.que.push(() => listenMessagesFromCreative());
 processQue();
